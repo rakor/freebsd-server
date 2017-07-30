@@ -11,7 +11,7 @@ TIMEZONE=Europe/Berlin
 
 NTPSERVER=de.pool.ntp.org
 
-MYSHELL=/bin/tcsh
+MYSHELL=/usr/local/bin/fish
 
 ###################
 # Don't change anything behind this line if you don't know what you are doing
@@ -33,7 +33,7 @@ CLASSNAME=localized
 ERRORLOG=/freebsd-server-errorlog
 MAILERCONF=/etc/mail/mailer.conf
 
-PACKAGES="editors/vim-lite sysutils/tmux mail/opensmtpd"
+PACKAGES="editors/vim-lite sysutils/tmux mail/opensmtpd shells/fish"
 
 #+ check for root
 #
