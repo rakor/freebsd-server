@@ -7,6 +7,7 @@
 LANGUAGE=de_DE.UTF-8
 COUNTRYCODE=de
 CHARSET=UTF-8
+TIMEZONE=Europe/Berlin
 
 NTPSERVER=de.pool.ntp.org
 
@@ -123,6 +124,11 @@ else
 		echo "! $NTPSERVER is not a valid ntp-server"
 	fi
 fi
+
+
+#+ set timezone
+#
+cp /usr/share/zoneinfo/$TIMEZONE /etc/localtime
 
 
 #+ no Coredumps please
