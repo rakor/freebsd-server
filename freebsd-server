@@ -226,3 +226,4 @@ cp $CONFIGEXAMPLES/home/.vimrc /root/.vimrc
 cp -f $CONFIGEXAMPLES/home/.cshrc /root/.cshrc
 
 echo "Finished. If everything went well, you should reboot now"
+echo "Please remember to secure your SSHD-configuration and to set up a FIREWALL!"
