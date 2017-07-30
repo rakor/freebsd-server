@@ -1,0 +1,222 @@
+#!/bin/sh
+
+###################
+# Userdefined variables - Change anything according to your needs here
+#
+
+LANGUAGE=de_DE.UTF-8
+COUNTRYCODE=de
+CHARSET=UTF-8
+
+NTPSERVER=de.pool.ntp.org
+
+MYSHELL=/bin/tcsh
+
+###################
+# Don't change anything behind this line if you don't know what you are doing
+#
+
+#+ internal variables
+#
+RCCONF=/etc/rc.conf
+PROFILE=/etc/profile
+LOGINCONF=/etc/login.conf
+ADDUSERCONF=/etc/adduser.conf
+GLOBALEXAMPLES=/usr/local/share/examples
+CONFIGEXAMPLES=$GLOBALEXAMPLES/rakors_config
+PASSWD=/etc/passwd
+SKELETONS=/usr/share/skel
+SYSCTL=/etc/sysctl.conf
+CLASSDESC=LocalUsers
+CLASSNAME=localized
+ERRORLOG=/freebsd-server-errorlog
+MAILERCONF=/etc/mail/mailer.conf
+
+PACKAGES="editors/vim-lite sysutils/tmux mail/opensmtpd"
+
+#+ check for root
+#
+if [ `id -u` -ne 0 ]; then
+	echo "This script must be run as root."
+	exit 1
+fi
+
+
+#+ freebsd-update
+#
+echo "searching for updates... please stand by"
+if freebsd-update fetch | grep -q "^No updates needed"; then
+	echo "+ No Update to install"
+else
+	freebsd-update install
+	echo "+ Updates installed"
+fi
+
+
+#+ install packages
+#
+env ASSUME_ALWAYS_YES=yes pkg bootstrap
+pkg install -y $PACKAGES && \
+echo "+ packages installed" || \
+echo "! Error while installing packages" | tee -a $ERRORLOG
+
+
+#+ language
+#
+if grep -q "^LANG=" $PROFILE; then
+	echo "! LANG is already set in $PROFILE. Doing nothing."
+else
+	echo "LANG=$LANGUAGE; export LANG" >> $PROFILE
+	echo "+ Language $LANGUAGE set in $PROFILE"
+fi
+
+
+if grep -q "^$CLASSNAME" $LOGINCONF; then
+	echo "! $CLASSNAME is already present in $LOGINCONF. Doing nothing."
+else
+	printf "$CLASSNAME|$CLASSDESC:\\\\ \n" >> $LOGINCONF
+	printf "\t:charset=$CHARSET:\\\\ \n" >> $LOGINCONF
+	printf "\t:lang=$LANGUAGE:\\\\ \n" >> $LOGINCONF
+	printf "\t:tc=default:\n" >> $LOGINCONF
+	echo "+ $CLASSNAME set in $LOGINCONF"
+
+	if cap_mkdb /etc/login.conf; then
+		echo "+ Login-Database refreshed"
+	else
+		echo "! Could not refresh Login-Database"
+	fi
+	if grep -q "^defaultclass" $ADDUSERCONF; then
+		echo "! defaultclass is already set. We will not set $CLASSNAME"
+	else
+		echo "defaultclass=$CLASSNAME" >> $ADDUSERCONF
+		echo "+ $CLASSNAME set as defaultclass for new users"
+	fi
+fi
+
+
+#+ tcsh as default shell
+#
+if grep -q "^defaultshell" $ADDUSERCONF; then
+	echo "! defaultshell is already set. We will not set $MYSHELL"
+else
+	echo "defaultshell=$MYSHELL" >> $ADDUSERCONF
+	echo "+ $MYSHELL set as defaultshell for new users"
+fi
+
+
+#+ ntp
+#
+if grep -q "ntpdate_enable" $RCCONF; then
+	echo "! ntp  is present in $RCCONF. Doing nothing"
+else
+	echo "trying to set date/time via ntp-server..."
+	if ntpdate $NTPSERVER; then
+		echo "ntpdate_enable=\"YES\"" >> $RCCONF
+		echo "+ ntp activated."
+		if grep -q "^ntpdate_hosts" $RCCONF; then
+			echo "! ntpdate_hosts is already set in $RCCONF. Doing nothing"
+		else
+			echo "ntpdate_hosts=\"$NTPSERVER\"" >> $RCCONF
+			echo "+ ntpdate_hosts set to $NTPSERVER."
+		fi
+	else
+		echo "! $NTPSERVER is not a valid ntp-server"
+	fi
+fi
+
+
+#+ no Coredumps please
+#
+if grep -q "^kern.coredump" $SYSCTL; then
+    echo "! Coredumps are already set. Doing nothing"
+else
+    echo "kern.coredump=0" >> $SYSCTL
+    echo "+ Coredumps are turned off"
+fi
+
+
+#+ Always yes for fsck - you need this on a remote machine
+#
+VARIABLE=fsck_y_enable
+if grep -q -E "^[[:space:]]*$VARIABLE" $RCCONF; then
+    echo "! $VARIABLE already set in $RCCONF"
+else
+    echo "$VARIABLE=\"YES\"" >> $RCCONF
+fi
+
+
+#+ disable network for syslog
+#
+VARIABLE=syslogd_flags
+if grep -q -E "^[[:space:]]*$VARIABLE" $RCCONF; then
+    echo "! $VARIABLE already set in $RCCONF"
+else
+    echo "$VARIABLE=\"-ss\"" >> $RCCONF
+fi
+
+
+#+ clear tmp
+#
+VARIABLE=clear_tmp_enable
+if grep -q -E "^[[:space:]]*$VARIABLE" $RCCONF; then
+    echo "! $VARIABLE already set in $RCCONF"
+else
+    echo "$VARIABLE=\"YES\"" >> $RCCONF
+fi
+
+
+#+ disable sendmail
+#
+VARIABLE=sendmail_enable
+if grep -q -E "^[[:space:]]*$VARIABLE" $RCCONF; then
+    echo "! $VARIABLE already set in $RCCONF"
+else
+    echo "$VARIABLE=\"NO\""                 >> $RCCONF
+    echo "sendmail_submit_enable=\"NO\""    >> $RCCONF
+    echo "sendmail_outbound_enable=\"NO\""  >> $RCCONF
+    echo "sendmail_msp_queue_enable=\"NO\"" >> $RCCONF 
+fi
+
+#+ set OpenSMTPd as mta
+#
+cp $MAILERCONF ${MAILERCONF}_old && \
+cat ${MAILERCONF}_old | sed -E -e
+"s/^((sendmail|send-mail|mailq|newaliases|hoststat|purgestat).*)$/#\\1/" > $MAILERCONF && \
+rm ${MAILERCONF}_old && \
+echo "sendmail /usr/local/sbin/smtpctl"                 >> $MAILERCONF
+echo "send-mail /usr/local/sbin/smtpctl"                >> $MAILERCONF
+echo "mailq /usr/local/sbin/smtpctl"                    >> $MAILERCONF
+echo "makemap /usr/local/libexec/opensmtpd/makemap"     >> $MAILERCONF
+echo "newaliases /usr/local/libexec/opensmtpd/makemap"  >> $MAILERCONF
+echo "smtpd_enable=\"YES\"" >> $RCCONF
+cp /usr/local/etc/mail/smtpd.conf.sample /usr/local/etc/mail/smtpd.conf
+echo "+ OpenSMTPd activated as mta"
+
+#+ fetch config examples
+#
+TMPZIPFILE=/tmp/master.zip
+GITHUBURL=https://github.com/rakor/config/archive/master.zip
+ZIPSUBFOLDER=config-master
+if [ -d $CONFIGEXAMPLES ]; then
+	echo "! $CONFIGEXAMPLES does already exist. Doing nothing."
+else
+	fetch --no-verify-peer -o $TMPZIPFILE $GITHUBURL
+	unzip -q -d $GLOBALEXAMPLES $TMPZIPFILE
+	mv $GLOBALEXAMPLES/$ZIPSUBFOLDER $CONFIGEXAMPLES
+	rm $TMPZIPFILE
+	echo "+ Example config-files fetched"
+fi 
+
+
+#+ Copy examples into skeleton
+#
+cp $CONFIGEXAMPLES/home/.vimrc $SKELETONS/dot.vimrc
+cp -f $CONFIGEXAMPLES/home/.cshrc $SKELETONS/dot.cshrc
+
+
+#+ Copy config for root
+#
+cp $CONFIGEXAMPLES/home/.vimrc /root/.vimrc
+cp -f $CONFIGEXAMPLES/home/.cshrc /root/.cshrc
+
+/sbin/reboot
