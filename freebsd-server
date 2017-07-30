@@ -224,4 +224,4 @@ cp -f $CONFIGEXAMPLES/home/.cshrc $SKELETONS/dot.cshrc
 cp $CONFIGEXAMPLES/home/.vimrc /root/.vimrc
 cp -f $CONFIGEXAMPLES/home/.cshrc /root/.cshrc
 
-/sbin/reboot
+echo "Finished. If everything went well, you should reboot now"
