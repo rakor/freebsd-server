@@ -180,8 +180,7 @@ fi
 #+ set OpenSMTPd as mta
 #
 cp $MAILERCONF ${MAILERCONF}_old && \
-cat ${MAILERCONF}_old | sed -E -e
-"s/^((sendmail|send-mail|mailq|newaliases|hoststat|purgestat).*)$/#\\1/" > $MAILERCONF && \
+cat ${MAILERCONF}_old | sed -E -e "s/^((sendmail|send-mail|mailq|newaliases|hoststat|purgestat).*)$/#\\1/" > $MAILERCONF && \
 rm ${MAILERCONF}_old && \
 echo "sendmail /usr/local/sbin/smtpctl"                 >> $MAILERCONF
 echo "send-mail /usr/local/sbin/smtpctl"                >> $MAILERCONF
