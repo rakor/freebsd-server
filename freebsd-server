@@ -57,6 +57,7 @@ fi
 #+ install packages
 #
 env ASSUME_ALWAYS_YES=yes pkg bootstrap
+pkg upgrade -y
 pkg install -y $PACKAGES && \
 echo "+ packages installed" || \
 echo "! Error while installing packages" | tee -a $ERRORLOG
